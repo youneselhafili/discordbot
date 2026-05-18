@@ -97,12 +97,12 @@ module.exports = {
                 return interaction.reply({ content: '❌ Nothing is playing.', ephemeral: true });
             }
             else if (interaction.customId === 'ctrl_next') {
-                const success = QueueManager.skip(interaction.guild.id);
-                return interaction.reply({ content: success ? '⏭️ Skipped!' : '❌ Nothing to skip.', ephemeral: true });
+                QueueManager.skip(interaction.guild.id);
+                return interaction.deferUpdate().catch(() => {});
             }
             else if (interaction.customId === 'ctrl_prev') {
-                const success = QueueManager.previous(interaction.guild.id);
-                return interaction.reply({ content: success ? '⏮️ Playing previous!' : '❌ No previous song.', ephemeral: true });
+                QueueManager.previous(interaction.guild.id);
+                return interaction.deferUpdate().catch(() => {});
             }
             else if (interaction.customId === 'ctrl_repeat') {
                 const mode = QueueManager.cycleRepeat(interaction.guild.id);

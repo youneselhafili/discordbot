@@ -73,7 +73,7 @@ class SpotifyAPI {
         const fetch = require('node-fetch');
         let tracks = [];
         let url = `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100&market=MA`;
-        
+
         while (url) {
             const res = await fetch(url, {
                 headers: { 'Authorization': `Bearer ${token}` }
@@ -86,7 +86,7 @@ class SpotifyAPI {
             }
             const data = await res.json();
             tracks.push(...data.items.filter(item => item.track).map(item => item.track));
-            url = data.next; 
+            url = data.next;
         }
         return tracks;
     }
@@ -98,7 +98,7 @@ class SpotifyAPI {
         let tracks = [];
         let url = `https://api.spotify.com/v1/albums/${albumId}/tracks?limit=50`;
         let mainAlbum = null;
-        
+
         const albumRes = await fetch(`https://api.spotify.com/v1/albums/${albumId}`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -268,21 +268,22 @@ class QueueManager {
             if (queue._leaveTimer) { clearTimeout(queue._leaveTimer); queue._leaveTimer = null; }
 
             const textChannel = queue._lastTextChannel || queue.controllerMessage?.channel;
-            
+
             (async () => {
                 if (textChannel) {
                     await this._cleanBotMessages(textChannel);
-                    
-                    // Send kick/leave message
-                    const leaveEmbed = new EmbedBuilder()
-                        .setColor('#ff0000')
-                        .setDescription('safi jriti 3liya \ud83d\ude12');
-                    
-                    textChannel.send({ embeds: [leaveEmbed] }).catch(() => {});
+
+                    // Only send this message if we were disconnected forcefully (kicked)
+                    if (!queue.isLeavingGracefully) {
+                        const leaveEmbed = new EmbedBuilder()
+                            .setColor('#ff0000')
+                            .setDescription('safi jriti 3liya \ud83d\ude12');
+                        textChannel.send({ embeds: [leaveEmbed] }).catch(() => { });
+                    }
                 }
             })();
 
-            if (queue.controllerMessage) queue.controllerMessage.delete().catch(() => {});
+            if (queue.controllerMessage) queue.controllerMessage.delete().catch(() => { });
 
             queue.songs = [];
             queue.history = [];
@@ -301,7 +302,7 @@ class QueueManager {
         try {
             const fetched = await textChannel.messages.fetch({ limit: 50 });
             const botMsgs = fetched.filter(m => m.author.bot && (Date.now() - m.createdTimestamp) < 14 * 24 * 60 * 60 * 1000);
-            if (botMsgs.size > 0) await textChannel.bulkDelete(botMsgs, true).catch(() => {});
+            if (botMsgs.size > 0) await textChannel.bulkDelete(botMsgs, true).catch(() => { });
         } catch (e) { /* silently fail */ }
     }
 
@@ -319,7 +320,7 @@ class QueueManager {
 
             let stdout = '';
             ytdlp.stdout.on('data', (data) => { stdout += data.toString(); });
-            ytdlp.stderr.on('data', () => {});
+            ytdlp.stderr.on('data', () => { });
             ytdlp.on('close', () => {
                 const directUrl = stdout.trim().split('\n')[0]?.trim();
                 done(directUrl && directUrl.startsWith('http') ? directUrl : null);
@@ -347,7 +348,7 @@ class QueueManager {
 
             let stdout = '';
             ytdlp.stdout.on('data', (data) => { stdout += data.toString(); });
-            ytdlp.stderr.on('data', () => {});
+            ytdlp.stderr.on('data', () => { });
             ytdlp.on('close', () => {
                 const lines = stdout.trim().split('\n');
                 const title = lines[0]?.trim();
@@ -386,7 +387,7 @@ class QueueManager {
 
             let stdout = '';
             ytdlp.stdout.on('data', (data) => { stdout += data.toString(); });
-            ytdlp.stderr.on('data', () => {});
+            ytdlp.stderr.on('data', () => { });
             ytdlp.on('close', () => {
                 const lines = stdout.trim().split('\n');
                 const url = lines[0]?.trim();
@@ -430,7 +431,7 @@ class QueueManager {
 
             let stdout = '';
             ytdlp.stdout.on('data', (data) => { stdout += data.toString(); });
-            ytdlp.stderr.on('data', () => {});
+            ytdlp.stderr.on('data', () => { });
             ytdlp.on('close', () => {
                 const lines = stdout.trim().split('\n').filter(l => l.trim());
                 const tracks = [];
@@ -482,7 +483,7 @@ class QueueManager {
             if (spotifyApi.isConfigured()) {
                 let type = null;
                 let id = null;
-                
+
                 if (finalUrl.includes('open.spotify.com')) {
                     const parts = finalUrl.split('open.spotify.com/')[1]?.split('?')[0]?.split('/');
                     if (parts && parts.length >= 2) {
@@ -579,7 +580,7 @@ class QueueManager {
     switchMode(guildId, newMode) {
         const queue = this.getQueue(guildId);
         if (queue.mode === newMode) return; // CRITICAL: Don't reset if already in this mode
-        
+
         queue.epoch++;
         queue.player.stop(true);
         if (queue._ytdlpProcess) { queue._ytdlpProcess.kill(); queue._ytdlpProcess = null; }
@@ -604,7 +605,7 @@ class QueueManager {
         if (songUrl.includes('spotify.com') || songUrl.includes('spotify.link')) {
             const tracks = await this.resolveSpotify(songUrl);
             if (queue.epoch !== currentEpoch) return;
-            
+
             if (tracks.error === 'NO_CREDENTIALS') {
                 if (textChannel) {
                     const embed = new EmbedBuilder()
@@ -623,7 +624,7 @@ class QueueManager {
 
             // Queue all tracks instantly with url: null (Just-In-Time resolution)
             console.log(`[PLAYLIST] Queuing ${tracks.length} Spotify tracks JIT...`);
-            
+
             for (let i = 0; i < tracks.length; i++) {
                 const tr = tracks[i];
                 queue.songs.push({
@@ -634,6 +635,7 @@ class QueueManager {
                     thumbnail: tr.thumbnail,
                     albumName: tr.albumName,
                     durationSec: tr.durationSec,
+                    source: 'spotify',
                     requestedBy,
                     textChannel: i === 0 ? textChannel : null
                 });
@@ -665,6 +667,7 @@ class QueueManager {
                 url: first.url,
                 title: first.title,
                 durationSec: first.durationSec || 0,
+                source: 'youtube',
                 requestedBy,
                 textChannel
             };
@@ -686,6 +689,7 @@ class QueueManager {
                             url: tr.url,
                             title: tr.title,
                             durationSec: tr.durationSec || 0,
+                            source: 'youtube',
                             requestedBy,
                             textChannel: null
                         });
@@ -702,7 +706,7 @@ class QueueManager {
         }
 
         // ── Normal song — play the EXACT URL given ──
-        const song = { url: songUrl, title, requestedBy, textChannel };
+        const song = { url: songUrl, title, source: 'youtube', requestedBy, textChannel };
         queue.songs.push(song);
 
         if (!queue.playing) {
@@ -744,7 +748,7 @@ class QueueManager {
             // ── Just-In-Time Resolution for Spotify ──
             if (!song.url && song.searchQuery) {
                 console.log(`[SPOTIFY JIT] Resolving YouTube URL for: "${song.searchQuery}"`);
-                
+
                 // Show loading state in controller
                 queue.currentSong = song;
                 queue.playing = true;
@@ -795,7 +799,7 @@ class QueueManager {
                     ]);
 
                     queue._ytdlpProcess = ytdlp;
-                    ytdlp.stdout.on('error', () => {});
+                    ytdlp.stdout.on('error', () => { });
                     ytdlp.stderr.on('data', (data) => {
                         const msg = data.toString().trim();
                         if (msg && !msg.includes('WARNING') && !msg.includes('[download]')
@@ -883,7 +887,11 @@ class QueueManager {
         const embed = new EmbedBuilder().setColor(modeColors[queue.mode] || 0x7C3AED);
 
         if (song) {
-            embed.setAuthor({ name: '🎶 Now Playing' });
+            if (song.source === 'spotify') {
+                embed.setAuthor({ name: '🎶 Now Spotify Playing' });
+            } else {
+                embed.setAuthor({ name: '🎶 Now Youtube Playing' });
+            }
             embed.setTitle(`${isPaused ? '⏸️' : '▶️'} ${song.title}`);
 
             // Show album art if available (Spotify tracks)
@@ -965,7 +973,7 @@ class QueueManager {
         const row = this.buildControllerButtons(guildId);
 
         try {
-            if (queue.controllerMessage) await queue.controllerMessage.delete().catch(() => {});
+            if (queue.controllerMessage) await queue.controllerMessage.delete().catch(() => { });
             const msg = await textChannel.send({ embeds: [embed], components: [row] });
             queue.controllerMessage = msg;
         } catch (err) {

@@ -14,7 +14,7 @@ module.exports = {
 
         try {
             await QueueManager.joinChannel(channel);
-            return interaction.reply('✅ Action done! 🔊 I have joined your voice channel.');
+            return interaction.reply('Hahowa ja 😏');
         } catch (error) {
             console.error('Error joining channel:', error);
             return interaction.reply({ content: '❌ Failed to join the voice channel.', ephemeral: true });

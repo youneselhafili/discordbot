@@ -9,10 +9,9 @@ module.exports = {
         const queue = QueueManager.getQueue(interaction.guild.id);
         
         if (queue && queue.connection) {
-            await interaction.reply('👋 **Leaving...**');
+            queue.isLeavingGracefully = true;
             queue.connection.destroy();
-            // resetQueue is triggered automatically by the Destroyed event
-            return interaction.deleteReply().catch(() => {});
+            return interaction.reply('Thalla 🫡').catch(() => {});
         } else {
             return interaction.reply({ content: 'I am not currently in a voice channel!', ephemeral: true });
         }
