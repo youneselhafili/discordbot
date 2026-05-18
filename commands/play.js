@@ -9,11 +9,20 @@ module.exports = {
         .addStringOption(option =>
             option.setName('query')
                 .setDescription('The song name or URL')
-                .setRequired(true)),
+                .setRequired(true))
+        .addStringOption(option =>
+            option.setName('type')
+                .setDescription('Search for a song or playlist?')
+                .setRequired(false)
+                .addChoices(
+                    { name: 'Song', value: 'song' },
+                    { name: 'Playlist', value: 'playlist' }
+                )),
     async execute(interaction) {
         await interaction.reply('🔍 **Searching...**');
 
         const query = interaction.options.getString('query');
+        const searchType = interaction.options.getString('type') || 'song';
         const channel = interaction.member.voice.channel;
 
         if (!channel) {
@@ -24,9 +33,16 @@ module.exports = {
             QueueManager.switchMode(interaction.guild.id, 'play');
             await QueueManager.joinChannel(channel);
 
-            // Spotify link
-            if (query.includes('spotify.com')) {
+            // Spotify link (including spotify.link short URLs)
+            if (query.includes('spotify.com') || query.includes('spotify.link')) {
                 await QueueManager.addSong(interaction.guild.id, query, 'Spotify Music', interaction.user.id, interaction.channel);
+                await interaction.deleteReply().catch(() => {});
+                return;
+            }
+
+            // YouTube Playlist — expand into individual tracks
+            if ((query.includes('youtube.com') || query.includes('youtu.be')) && query.includes('list=')) {
+                await QueueManager.addSong(interaction.guild.id, query, 'YouTube Playlist', interaction.user.id, interaction.channel);
                 await interaction.deleteReply().catch(() => {});
                 return;
             }
@@ -48,19 +64,30 @@ module.exports = {
             }
 
             // Text search → show selection menu
-            const searchResults = await play.search(query, { limit: 5 });
+            const searchOpts = { limit: 5 };
+            if (searchType === 'playlist') {
+                searchOpts.source = { youtube: 'playlist' };
+            }
+            
+            const searchResults = await play.search(query, searchOpts);
             if (!searchResults || searchResults.length === 0) {
-                return interaction.editReply('No results found.');
+                return interaction.editReply(`No ${searchType} results found.`);
             }
 
             if (!interaction.client.searchResults) interaction.client.searchResults = new Map();
             interaction.client.searchResults.set(interaction.user.id, searchResults);
 
-            const options = searchResults.map((res, i) => ({
-                label: res.title.substring(0, 100),
-                description: `${res.channel?.name || 'Unknown'} • ${res.durationRaw || ''}`.substring(0, 100),
-                value: `search_${i}`,
-            }));
+            const options = searchResults.map((res, i) => {
+                const desc = searchType === 'playlist'
+                    ? `${res.channel?.name || 'Unknown'} • ${res.videoCount || 0} videos`
+                    : `${res.channel?.name || 'Unknown'} • ${res.durationRaw || ''}`;
+                
+                return {
+                    label: res.title.substring(0, 100),
+                    description: desc.substring(0, 100),
+                    value: `search_${i}`,
+                };
+            });
 
             const selectMenu = new StringSelectMenuBuilder()
                 .setCustomId('play_search_select')

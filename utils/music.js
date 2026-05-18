@@ -72,13 +72,18 @@ class SpotifyAPI {
         if (!token) return null;
         const fetch = require('node-fetch');
         let tracks = [];
-        let url = `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100`;
+        let url = `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100&market=MA`;
         
         while (url) {
             const res = await fetch(url, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
-            if (!res.ok) break;
+            if (!res.ok) {
+                console.error(`[SPOTIFY API] Playlist error: ${res.status} ${res.statusText}`);
+                const body = await res.text().catch(() => '');
+                console.error(`[SPOTIFY API] Response: ${body}`);
+                break;
+            }
             const data = await res.json();
             tracks.push(...data.items.filter(item => item.track).map(item => item.track));
             url = data.next; 
@@ -172,7 +177,6 @@ class QueueManager {
                     } else {
                         queue.playing = false;
                         queue.currentSong = null;
-                        this.updateController(guildId);
                         // Wait 15s then leave if still idle
                         queue._leaveTimer = setTimeout(() => {
                             const q = this.queues.get(guildId);
@@ -269,10 +273,10 @@ class QueueManager {
                 if (textChannel) {
                     await this._cleanBotMessages(textChannel);
                     
-                    // Send Jockie Music style leave message
+                    // Send kick/leave message
                     const leaveEmbed = new EmbedBuilder()
-                        .setColor('#ff0000') // Red for disconnect
-                        .setDescription('👋 **Left the voice channel.**');
+                        .setColor('#ff0000')
+                        .setDescription('safi jriti 3liya \ud83d\ude12');
                     
                     textChannel.send({ embeds: [leaveEmbed] }).catch(() => {});
                 }
@@ -406,6 +410,57 @@ class QueueManager {
         });
     }
 
+    // ─── YouTube Playlist Resolver ─────────────────────
+    resolveYouTubePlaylist(playlistUrl) {
+        return new Promise((resolve) => {
+            let resolved = false;
+            const done = (val) => { if (!resolved) { resolved = true; resolve(val); } };
+
+            const ytdlp = spawn(YT_DLP_PATH, [
+                '--flat-playlist',
+                '--print', 'url',
+                '--print', 'title',
+                '--print', 'uploader',
+                '--print', 'duration',
+                '--no-download',
+                '--no-check-certificates',
+                '--no-warnings',
+                playlistUrl
+            ]);
+
+            let stdout = '';
+            ytdlp.stdout.on('data', (data) => { stdout += data.toString(); });
+            ytdlp.stderr.on('data', () => {});
+            ytdlp.on('close', () => {
+                const lines = stdout.trim().split('\n').filter(l => l.trim());
+                const tracks = [];
+                // Each track outputs 4 lines: url, title, uploader, duration
+                for (let i = 0; i + 3 < lines.length; i += 4) {
+                    const videoId = lines[i].trim();
+                    const title = lines[i + 1]?.trim() || 'Unknown';
+                    let artist = lines[i + 2]?.trim() || '';
+                    const duration = parseInt(lines[i + 3]?.trim()) || 0;
+
+                    if (artist) {
+                        artist = artist.replace(/ - Topic$/i, '').replace(/VEVO$/i, '').trim();
+                    }
+
+                    const url = videoId.startsWith('http')
+                        ? videoId
+                        : `https://www.youtube.com/watch?v=${videoId}`;
+
+                    const fullTitle = artist && artist !== 'NA' && artist.length > 0
+                        ? `${title} - ${artist}` : title;
+
+                    tracks.push({ url, title: fullTitle, durationSec: duration });
+                }
+                done(tracks);
+            });
+            ytdlp.on('error', () => done([]));
+            setTimeout(() => { ytdlp.kill(); done([]); }, 30000);
+        });
+    }
+
     // ─── Spotify Resolver (full metadata) ──────────────
     async resolveSpotify(url) {
         try {
@@ -444,16 +499,20 @@ class QueueManager {
 
                 if (type && id) {
                     let tracks = [];
+                    console.log(`[SPOTIFY] Resolving ${type}: ${id}`);
                     if (type === 'track') {
                         const track = await spotifyApi.getTrack(id);
                         if (track) tracks = [track];
                     } else if (type === 'playlist') {
-                        tracks = await spotifyApi.getPlaylist(id);
+                        tracks = await spotifyApi.getPlaylist(id) || [];
                     } else if (type === 'album') {
-                        tracks = await spotifyApi.getAlbum(id);
+                        tracks = await spotifyApi.getAlbum(id) || [];
                     }
 
-                    return tracks.map(t => {
+                    console.log(`[SPOTIFY] Got ${tracks.length} tracks from ${type}`);
+
+                    if (tracks.length > 0) {
+                        return tracks.map(t => {
                             const name = t.name || '';
                             const allArtists = t.artists?.map(a => a.name) || [];
                             const artistStr = allArtists.join(', ');
@@ -476,8 +535,10 @@ class QueueManager {
                                 _source: 'official'
                             };
                         });
+                    } else {
+                        console.log(`[SPOTIFY] Official API failed to return tracks, falling back to scraper...`);
+                    }
                 }
-                return []; // If configured but parsing failed or no tracks, don't fallback to scraper
             }
 
             // Fallback to scraper
@@ -560,62 +621,81 @@ class QueueManager {
                 return;
             }
 
-            // First track: search via yt-dlp and play
-            const t = tracks[0];
-            console.log(`[SPOTIFY] Resolved: "${t.name}" by ${t.artist} (${t.durationSec}s)`);
-            const firstResult = await this.ytdlpSearch(t.searchQuery);
-            if (queue.epoch !== currentEpoch) return;
-            if (firstResult) {
-                const song = {
-                    url: firstResult.url,
-                    title: t.title,
-                    artist: t.artist,
-                    thumbnail: t.thumbnail,
-                    albumName: t.albumName,
-                    durationSec: t.durationSec,
+            // Queue all tracks instantly with url: null (Just-In-Time resolution)
+            console.log(`[PLAYLIST] Queuing ${tracks.length} Spotify tracks JIT...`);
+            
+            for (let i = 0; i < tracks.length; i++) {
+                const tr = tracks[i];
+                queue.songs.push({
+                    url: null, // Resolves at playback time
+                    searchQuery: tr.searchQuery,
+                    title: tr.title,
+                    artist: tr.artist,
+                    thumbnail: tr.thumbnail,
+                    albumName: tr.albumName,
+                    durationSec: tr.durationSec,
                     requestedBy,
-                    textChannel
-                };
-                queue.songs.push(song);
-                if (!queue.playing) {
-                    this.playSong(guildId, queue.songs.shift());
-                } else {
-                    this.updateController(guildId);
-                }
-            } else {
-                if (textChannel) textChannel.send(`❌ Could not find "${t.title}" on YouTube.`).catch(console.error);
+                    textChannel: i === 0 ? textChannel : null
+                });
             }
 
-            // Background-load remaining tracks via yt-dlp search
+            if (!queue.playing && queue.songs.length > 0) {
+                this.playSong(guildId, queue.songs.shift());
+            } else {
+                this.updateController(guildId);
+            }
+            return;
+        }
+
+        // ── YouTube Playlist: resolve each video individually ──
+        if ((songUrl.includes('youtube.com') || songUrl.includes('youtu.be')) && songUrl.includes('list=')) {
+            console.log('[PLAYLIST] Resolving YouTube playlist...');
+            const tracks = await this.resolveYouTubePlaylist(songUrl);
+            if (queue.epoch !== currentEpoch) return;
+            if (!tracks || tracks.length === 0) {
+                if (textChannel) textChannel.send('❌ Failed to resolve YouTube playlist.').catch(console.error);
+                return;
+            }
+
+            console.log(`[PLAYLIST] Found ${tracks.length} tracks`);
+
+            // First track: play immediately
+            const first = tracks[0];
+            const firstSong = {
+                url: first.url,
+                title: first.title,
+                durationSec: first.durationSec || 0,
+                requestedBy,
+                textChannel
+            };
+            queue.songs.push(firstSong);
+            if (!queue.playing) {
+                this.playSong(guildId, queue.songs.shift());
+            } else {
+                this.updateController(guildId);
+            }
+
+            // Background-load remaining tracks
             if (tracks.length > 1) {
                 const epochAtStart = queue.epoch;
                 (async () => {
                     for (let i = 1; i < tracks.length; i++) {
                         if (queue.epoch !== epochAtStart) return;
-                        try {
-                            const tr = tracks[i];
-                            console.log(`[SPOTIFY] Loading: "${tr.name}" by ${tr.artist}`);
-                            const result = await this.ytdlpSearch(tr.searchQuery);
-                            if (queue.epoch !== epochAtStart) return;
-                            if (result) {
-                                queue.songs.push({
-                                    url: result.url,
-                                    title: tr.title,
-                                    artist: tr.artist,
-                                    thumbnail: tr.thumbnail,
-                                    albumName: tr.albumName,
-                                    durationSec: tr.durationSec,
-                                    requestedBy,
-                                    textChannel: null
-                                });
-                                if (!queue.playing && queue.songs.length > 0) {
-                                    this.playSong(guildId, queue.songs.shift());
-                                }
-                            }
-                        } catch (err) {
-                            console.error('Error loading Spotify track:', err);
+                        const tr = tracks[i];
+                        queue.songs.push({
+                            url: tr.url,
+                            title: tr.title,
+                            durationSec: tr.durationSec || 0,
+                            requestedBy,
+                            textChannel: null
+                        });
+                        if (!queue.playing && queue.songs.length > 0) {
+                            this.playSong(guildId, queue.songs.shift());
                         }
                     }
+                    // Update controller once all tracks are loaded
+                    this.updateController(guildId);
+                    console.log(`[PLAYLIST] All ${tracks.length} tracks queued.`);
                 })();
             }
             return;
@@ -651,7 +731,7 @@ class QueueManager {
         const epochAtStart = queue.epoch;
 
         try {
-            if (!song || !song.url) { queue.playing = false; return; }
+            if (!song) { queue.playing = false; return; }
             if (song.textChannel) queue._lastTextChannel = song.textChannel;
             if (queue._leaveTimer) { clearTimeout(queue._leaveTimer); queue._leaveTimer = null; }
 
@@ -660,6 +740,33 @@ class QueueManager {
                 queue._ytdlpProcess.kill();
                 queue._ytdlpProcess = null;
             }
+
+            // ── Just-In-Time Resolution for Spotify ──
+            if (!song.url && song.searchQuery) {
+                console.log(`[SPOTIFY JIT] Resolving YouTube URL for: "${song.searchQuery}"`);
+                
+                // Show loading state in controller
+                queue.currentSong = song;
+                queue.playing = true;
+                this.updateController(guildId);
+
+                const result = await this.ytdlpSearch(song.searchQuery);
+                if (queue.epoch !== epochAtStart) return;
+
+                if (!result) {
+                    console.error(`[SPOTIFY JIT] Failed to find YouTube video for: "${song.searchQuery}"`);
+                    if (queue.songs.length > 0) {
+                        this.playSong(guildId, queue.songs.shift());
+                    } else {
+                        queue.playing = false;
+                        queue.currentSong = null;
+                    }
+                    return;
+                }
+                song.url = result.url;
+            }
+
+            if (!song.url) { queue.playing = false; return; }
 
             console.log(`[PLAY] Playing: "${song.title}" | URL: ${song.url}`);
             queue.currentSong = song;
