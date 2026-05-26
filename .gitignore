@@ -1,4 +1,4 @@
+*-player-script.js
 node_modules/
 .env
 database.sqlite
-node_modules
