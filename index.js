@@ -2,7 +2,7 @@ require('dotenv').config();
 const { Client, GatewayIntentBits, Collection, REST, Routes } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
-const db = require('./database'); // initialize db
+require('./database');
 
 const client = new Client({
     intents: [
@@ -10,13 +10,11 @@ const client = new Client({
         GatewayIntentBits.GuildVoiceStates,
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.MessageContent,
-        GatewayIntentBits.DirectMessages,
     ],
     partials: ['CHANNEL']
 });
 
 client.commands = new Collection();
-client.queue = new Map(); // Store music queue per guild
 
 const commandsPath = path.join(__dirname, 'commands');
 if (!fs.existsSync(commandsPath)) fs.mkdirSync(commandsPath);
@@ -61,7 +59,6 @@ client.once('ready', async () => {
     }
 });
 
-// Prevent the bot from crashing on unhandled errors
 process.on('unhandledRejection', (error) => {
     console.error('[UNHANDLED REJECTION]', error);
 });
