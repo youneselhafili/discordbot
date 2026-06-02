@@ -273,6 +273,33 @@ module.exports = {
                 return interaction.reply({ content: '✅ Message saved!', ephemeral: true });
             }
 
+            if (customId === 'l7am9a_modal') {
+                const msg = interaction.fields.getTextInputValue('l7am9a_msg');
+                const channel = interaction.member.voice.channel;
+                if (!channel) {
+                    return interaction.reply({ content: '❌ You must be in a voice channel!', ephemeral: true });
+                }
+
+                await interaction.deferReply();
+
+                const members = channel.members.filter(m => !m.user.bot).map(m => m);
+                if (members.length === 0) {
+                    return interaction.editReply('❌ No other users in the voice channel!');
+                }
+
+                const count = Math.floor(Math.random() * 3) + 1;
+                const shuffled = [...members].sort(() => Math.random() - 0.5);
+                const toDisconnect = shuffled.slice(0, Math.min(count, shuffled.length));
+
+                for (const member of toDisconnect) {
+                    try { await member.voice.disconnect(); } catch (err) { console.error(err); }
+                }
+
+                const names = toDisconnect.map(m => m.user.toString()).join(', ');
+                await channel.send(`🎲 **${msg}**\n${names}`);
+                return interaction.editReply(`✅ Disconnected ${toDisconnect.length} user(s)!`);
+            }
+
             return;
         }
     },

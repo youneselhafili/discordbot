@@ -7,6 +7,8 @@ module.exports = {
         .setName('wa3r')
         .setDescription('Configure role stripping and assignment on VC join'),
     async execute(interaction) {
+        await interaction.deferReply({ ephemeral: true });
+
         const configRef = doc(db, 'guilds', interaction.guild.id);
         const configSnap = await getDoc(configRef);
         let config = configSnap.exists() ? configSnap.data() : {};
@@ -29,6 +31,6 @@ module.exports = {
             new ButtonBuilder().setCustomId('wa3r_save').setLabel('✅ Save').setStyle(ButtonStyle.Success),
         );
 
-        await interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
+        await interaction.editReply({ embeds: [embed], components: [row] });
     },
 };

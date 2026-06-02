@@ -7,6 +7,8 @@ module.exports = {
         .setName('setup')
         .setDescription('Configure welcome message with action buttons for voice channels'),
     async execute(interaction) {
+        await interaction.deferReply({ ephemeral: true });
+
         const configRef = doc(db, 'guilds', interaction.guild.id);
         const configSnap = await getDoc(configRef);
         let config = configSnap.exists() ? configSnap.data() : {};
@@ -32,6 +34,6 @@ module.exports = {
             new ButtonBuilder().setCustomId('setup_done').setLabel('✅ Done').setStyle(ButtonStyle.Secondary),
         );
 
-        await interaction.reply({ embeds: [embed], components: [row1, row2], ephemeral: true });
+        await interaction.editReply({ embeds: [embed], components: [row1, row2] });
     },
 };

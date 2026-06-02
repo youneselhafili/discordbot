@@ -1,44 +1,27 @@
-const { SlashCommandBuilder } = require('discord.js');
+const { SlashCommandBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } = require('discord.js');
 
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('l7am9a')
-        .setDescription('Auto-disconnect random users from voice channel')
-        .addIntegerOption(option =>
-            option.setName('count')
-                .setDescription('Number of users to disconnect (1-3)')
-                .setRequired(true)
-                .setMinValue(1)
-                .setMaxValue(3)),
+        .setDescription('Disconnect random users with a custom message'),
     async execute(interaction) {
-        const count = interaction.options.getInteger('count');
         const channel = interaction.member.voice.channel;
-
         if (!channel) {
             return interaction.reply({ content: '❌ You must be in a voice channel!', ephemeral: true });
         }
 
-        const members = channel.members.filter(m => !m.user.bot).map(m => m);
-        if (members.length === 0) {
-            return interaction.reply({ content: '❌ No other users in the voice channel!', ephemeral: true });
-        }
+        const modal = new ModalBuilder()
+            .setCustomId('l7am9a_modal')
+            .setTitle('L7am9a - Custom Message');
 
-        const toDisconnect = [];
-        const shuffled = [...members].sort(() => Math.random() - 0.5);
-        const amount = Math.min(count, shuffled.length);
+        const msgInput = new TextInputBuilder()
+            .setCustomId('l7am9a_msg')
+            .setLabel('Message to send')
+            .setStyle(TextInputStyle.Paragraph)
+            .setRequired(true)
+            .setMaxLength(2000);
 
-        for (let i = 0; i < amount; i++) {
-            toDisconnect.push(shuffled[i]);
-        }
-
-        await interaction.reply({ content: `🎲 **L7am9a!** Disconnecting ${toDisconnect.length} user(s)...` });
-
-        for (const member of toDisconnect) {
-            try {
-                await member.voice.disconnect();
-            } catch (err) {
-                console.error(`Failed to disconnect ${member.user.tag}:`, err);
-            }
-        }
+        modal.addComponents(new ActionRowBuilder().addComponents(msgInput));
+        await interaction.showModal(modal);
     },
 };
