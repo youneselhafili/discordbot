@@ -49,27 +49,29 @@ module.exports = {
             }
 
             if (customId === 'setup_remove_button') {
+                await interaction.deferUpdate();
                 const configRef = doc(db, 'guilds', interaction.guild.id);
                 const configSnap = await getDoc(configRef);
                 const config = configSnap.exists() ? configSnap.data() : {};
                 const buttons = config.setup?.buttons || [];
-                if (buttons.length === 0) return interaction.reply({ content: 'No buttons to remove!', ephemeral: true });
+                if (buttons.length === 0) return interaction.editReply({ content: 'No buttons to remove!', components: [] });
 
                 const select = new StringSelectMenuBuilder().setCustomId('setup_remove_btn_select').setPlaceholder('Select button to remove...').addOptions(
                     buttons.map((b, i) => new StringSelectMenuOptionBuilder().setLabel(`${i + 1}. ${b.label}`).setValue(i.toString()).setDescription(`Action: ${b.action}`))
                 );
-                return interaction.reply({ content: 'Select a button to remove:', components: [new ActionRowBuilder().addComponents(select)], ephemeral: true });
+                return interaction.editReply({ content: 'Select a button to remove:', components: [new ActionRowBuilder().addComponents(select)] });
             }
 
             if (customId === 'setup_done') {
+                await interaction.deferUpdate();
                 const configRef = doc(db, 'guilds', interaction.guild.id);
                 const configSnap = await getDoc(configRef);
                 const config = configSnap.exists() ? configSnap.data() : {};
                 const setup = config.setup || { textMessage: '', channels: [], buttons: [] };
-                if (!setup.textMessage) return interaction.reply({ content: '❌ Please set a message first!', ephemeral: true });
-                if (setup.channels.length === 0) return interaction.reply({ content: '❌ Please select at least one channel!', ephemeral: true });
+                if (!setup.textMessage) return interaction.editReply({ content: '❌ Please set a message first!', components: [] });
+                if (setup.channels.length === 0) return interaction.editReply({ content: '❌ Please select at least one channel!', components: [] });
                 await setDoc(configRef, { ...config, setup }, { merge: true });
-                return interaction.update({ content: '✅ Setup saved!', embeds: [], components: [] });
+                return interaction.editReply({ content: '✅ Setup saved!', embeds: [], components: [] });
             }
 
             if (customId === 'wa3r_edit_msg') {
@@ -96,14 +98,15 @@ module.exports = {
             }
 
             if (customId === 'wa3r_save') {
+                await interaction.deferUpdate();
                 const configRef = doc(db, 'guilds', interaction.guild.id);
                 const configSnap = await getDoc(configRef);
                 const config = configSnap.exists() ? configSnap.data() : {};
                 const wa3r = config.wa3r || { textMessage: '', channels: [], roleId: null };
-                if (!wa3r.roleId) return interaction.reply({ content: '❌ Please select a role first!', ephemeral: true });
-                if (wa3r.channels.length === 0) return interaction.reply({ content: '❌ Please select at least one channel!', ephemeral: true });
+                if (!wa3r.roleId) return interaction.editReply({ content: '❌ Please select a role first!', components: [] });
+                if (wa3r.channels.length === 0) return interaction.editReply({ content: '❌ Please select at least one channel!', components: [] });
                 await setDoc(configRef, { ...config, wa3r }, { merge: true });
-                return interaction.update({ content: '✅ Wa3r saved!', embeds: [], components: [] });
+                return interaction.editReply({ content: '✅ Wa3r saved!', embeds: [], components: [] });
             }
 
             if (customId === 'vote_edit_channels') {
@@ -115,23 +118,25 @@ module.exports = {
             }
 
             if (customId === 'vote_save') {
+                await interaction.deferUpdate();
                 const configRef = doc(db, 'guilds', interaction.guild.id);
                 const configSnap = await getDoc(configRef);
                 const config = configSnap.exists() ? configSnap.data() : {};
                 const vote = config.vote || { channels: [] };
-                if (vote.channels.length === 0) return interaction.reply({ content: '❌ Please select at least one channel!', ephemeral: true });
+                if (vote.channels.length === 0) return interaction.editReply({ content: '❌ Please select at least one channel!', components: [] });
                 await setDoc(configRef, { ...config, vote }, { merge: true });
-                return interaction.update({ content: '✅ Vote saved!', embeds: [], components: [] });
+                return interaction.editReply({ content: '✅ Vote saved!', embeds: [], components: [] });
             }
 
             if (customId.startsWith('vc_btn_')) {
+                await interaction.deferReply({ ephemeral: true });
                 const idx = parseInt(customId.split('_')[2]);
                 const configRef = doc(db, 'guilds', interaction.guild.id);
                 const configSnap = await getDoc(configRef);
                 const config = configSnap.exists() ? configSnap.data() : {};
                 const buttons = config.setup?.buttons || [];
                 const btn = buttons[idx];
-                if (!btn) return interaction.reply({ content: 'Button configuration not found!', ephemeral: true });
+                if (!btn) return interaction.editReply({ content: 'Button configuration not found!' });
 
                 const member = interaction.member;
                 try {
@@ -155,10 +160,10 @@ module.exports = {
                             if (btn.roleId) await member.roles.add(btn.roleId);
                             break;
                     }
-                    await interaction.reply({ content: `✅ ${btn.label} applied!`, ephemeral: true });
+                    await interaction.editReply({ content: `✅ ${btn.label} applied!` });
                 } catch (err) {
                     console.error('Button action error:', err);
-                    await interaction.reply({ content: '❌ Failed to apply action.', ephemeral: true });
+                    await interaction.editReply({ content: '❌ Failed to apply action.' });
                 }
             }
 
@@ -166,6 +171,7 @@ module.exports = {
         }
 
         if (interaction.isStringSelectMenu()) {
+            await interaction.deferUpdate();
             const customId = interaction.customId;
 
             if (customId === 'setup_channel_select') {
@@ -175,7 +181,7 @@ module.exports = {
                 if (!config.setup) config.setup = { textMessage: '', channels: [], buttons: [] };
                 config.setup.channels = interaction.values;
                 await setDoc(configRef, config, { merge: true });
-                return interaction.update({ content: `✅ ${interaction.values.length} channel(s) selected!`, components: [] });
+                return interaction.editReply({ content: `✅ ${interaction.values.length} channel(s) selected!`, components: [] });
             }
 
             if (customId === 'setup_remove_btn_select') {
@@ -187,7 +193,7 @@ module.exports = {
                     config.setup.buttons.splice(idx, 1);
                     await setDoc(configRef, config, { merge: true });
                 }
-                return interaction.update({ content: '✅ Button removed!', components: [] });
+                return interaction.editReply({ content: '✅ Button removed!', components: [] });
             }
 
             if (customId === 'wa3r_channel_select') {
@@ -197,7 +203,7 @@ module.exports = {
                 if (!config.wa3r) config.wa3r = { textMessage: '', channels: [], roleId: null };
                 config.wa3r.channels = interaction.values;
                 await setDoc(configRef, config, { merge: true });
-                return interaction.update({ content: `✅ ${interaction.values.length} channel(s) selected!`, components: [] });
+                return interaction.editReply({ content: `✅ ${interaction.values.length} channel(s) selected!`, components: [] });
             }
 
             if (customId === 'wa3r_role_select') {
@@ -207,7 +213,7 @@ module.exports = {
                 if (!config.wa3r) config.wa3r = { textMessage: '', channels: [], roleId: null };
                 config.wa3r.roleId = interaction.values[0];
                 await setDoc(configRef, config, { merge: true });
-                return interaction.update({ content: `✅ Role <@&${interaction.values[0]}> selected!`, components: [] });
+                return interaction.editReply({ content: `✅ Role <@&${interaction.values[0]}> selected!`, components: [] });
             }
 
             if (customId === 'vote_channel_select') {
@@ -217,7 +223,7 @@ module.exports = {
                 if (!config.vote) config.vote = { channels: [] };
                 config.vote.channels = interaction.values;
                 await setDoc(configRef, config, { merge: true });
-                return interaction.update({ content: `✅ ${interaction.values.length} channel(s) selected!`, components: [] });
+                return interaction.editReply({ content: `✅ ${interaction.values.length} channel(s) selected!`, components: [] });
             }
 
             return;
@@ -225,6 +231,10 @@ module.exports = {
 
         if (interaction.isModalSubmit()) {
             const customId = interaction.customId;
+
+            if (customId === 'setup_msg_modal' || customId === 'setup_addbtn_modal' || customId === 'wa3r_msg_modal') {
+                await interaction.deferReply({ ephemeral: true });
+            }
 
             if (customId === 'setup_msg_modal') {
                 const text = interaction.fields.getTextInputValue('setup_msg_text');
@@ -234,7 +244,7 @@ module.exports = {
                 if (!config.setup) config.setup = { textMessage: '', channels: [], buttons: [] };
                 config.setup.textMessage = text;
                 await setDoc(configRef, config, { merge: true });
-                return interaction.reply({ content: '✅ Message saved!', ephemeral: true });
+                return interaction.editReply({ content: '✅ Message saved!' });
             }
 
             if (customId === 'setup_addbtn_modal') {
@@ -244,7 +254,7 @@ module.exports = {
 
                 const allowedActions = ['disconnect', 'mute', 'unmute', 'deafen', 'undeafen', 'role'];
                 if (!allowedActions.includes(action)) {
-                    return interaction.reply({ content: `❌ Invalid action! Allowed: ${allowedActions.join(', ')}`, ephemeral: true });
+                    return interaction.editReply({ content: `❌ Invalid action! Allowed: ${allowedActions.join(', ')}` });
                 }
 
                 const configRef = doc(db, 'guilds', interaction.guild.id);
@@ -254,12 +264,12 @@ module.exports = {
                 if (!config.setup.buttons) config.setup.buttons = [];
 
                 if (config.setup.buttons.length >= 5) {
-                    return interaction.reply({ content: '❌ Maximum 5 buttons allowed!', ephemeral: true });
+                    return interaction.editReply({ content: '❌ Maximum 5 buttons allowed!' });
                 }
 
                 config.setup.buttons.push({ label, action, roleId: action === 'role' ? roleId : null, style: action === 'disconnect' ? 'Danger' : action === 'mute' || action === 'deafen' ? 'Danger' : 'Success' });
                 await setDoc(configRef, config, { merge: true });
-                return interaction.reply({ content: `✅ Button "${label}" added!`, ephemeral: true });
+                return interaction.editReply({ content: `✅ Button "${label}" added!` });
             }
 
             if (customId === 'wa3r_msg_modal') {
@@ -270,7 +280,7 @@ module.exports = {
                 if (!config.wa3r) config.wa3r = { textMessage: '', channels: [], roleId: null };
                 config.wa3r.textMessage = text;
                 await setDoc(configRef, config, { merge: true });
-                return interaction.reply({ content: '✅ Message saved!', ephemeral: true });
+                return interaction.editReply({ content: '✅ Message saved!' });
             }
 
             if (customId === 'l7am9a_modal') {
@@ -279,7 +289,6 @@ module.exports = {
                 if (!channel) {
                     return interaction.reply({ content: '❌ You must be in a voice channel!', ephemeral: true });
                 }
-
                 await interaction.deferReply();
 
                 const members = channel.members.filter(m => !m.user.bot).map(m => m);
