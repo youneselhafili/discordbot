@@ -1,42 +1,20 @@
-# GS - Discord Music Bot
+# GS - Discord Fun Bot
 
-A Discord music bot built with discord.js featuring playback, queue management, radio, and lofi streams.
-
-## Features
-
-- Music playback from YouTube and Spotify
-- Queue management (skip, shuffle, repeat, clear)
-- 24/7 lofi radio
-- Auto-join voice channels
-- Volume control
-- User library system
+A Discord bot for voice channel fun: welcome messages with action buttons, random disconnects, role management, and voting.
 
 ## Commands
 
 | Command | Description |
 |---------|-------------|
-| `/play` | Play a song or playlist |
-| `/skip` | Skip current track |
-| `/pause` | Pause playback |
-| `/volume` | Adjust volume |
-| `/queue` | View the queue |
-| `/shuffle` | Shuffle the queue |
-| `/repeat` | Toggle repeat mode |
-| `/clear` | Clear the queue |
-| `/join` | Join your voice channel |
-| `/leave` | Leave the voice channel |
-| `/autojoin` | Toggle auto-join on voice entry |
-| `/lofi` | Start lofi radio stream |
-| `/radio` | Start a radio station |
-| `/library` | Manage your saved tracks |
-| `/adduser` | Register user for library features |
-| `/settings` | Configure bot settings |
+| `/setup` | Configure welcome message with action buttons (disconnect, mute, etc.) for voice channels |
+| `/l7am9a` | Randomly disconnect 1-3 users from your voice channel |
+| `/wa3r` | Configure role stripping + role assignment when users join voice channels |
+| `/vote` | Configure vote-to-kick for voice channels (members vote AH/LA to keep or kick) |
 
 ## Setup
 
 1. Clone the repo
 2. Run `npm install`
-3. Copy `.env` and fill in your tokens:
+3. Copy `.env` and fill in:
    - `DISCORD_TOKEN` - Your bot token from Discord Developer Portal
-   - `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET` - Spotify API credentials
 4. Run `node index.js`
