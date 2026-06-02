@@ -5,6 +5,8 @@ const db = require('../database');
 module.exports = {
     name: Events.InteractionCreate,
     async execute(interaction, client) {
+        console.log(`[INTERACTION] Received: ${interaction.type} | ${interaction.customId || interaction.commandName || 'unknown'}`);
+        try {
         if (interaction.isChatInputCommand()) {
             const command = client.commands.get(interaction.commandName);
             if (!command) return;
@@ -310,6 +312,12 @@ module.exports = {
             }
 
             return;
+        }
+        } catch (err) {
+            console.error('[INTERACTION ERROR]', err);
+            if (!interaction.replied && !interaction.deferred) {
+                try { await interaction.reply({ content: '❌ An error occurred.', ephemeral: true }); } catch (e) {}
+            }
         }
     },
 };
